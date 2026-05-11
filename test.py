@@ -358,6 +358,25 @@ def home():
 def run_bot():
     print("✅ Bot ishga tushmoqda...")
 
+    while True:
+        try:
+            bot.remove_webhook()
+            print("✅ Webhook o'chirildi")
+
+            bot.infinity_polling(
+                timeout=60,
+                long_polling_timeout=60,
+                skip_pending=True
+            )
+
+        except Exception as e:
+            print("❌ Bot polling xatosi:", e)
+            print("🔁 Bot 5 soniyadan keyin qayta ishga tushadi...")
+
+            import time
+            time.sleep(5)
+
+
     try:
         bot.remove_webhook()
         print("✅ Webhook o'chirildi")
@@ -373,5 +392,12 @@ def run_bot():
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))
+
     threading.Thread(target=run_bot, daemon=True).start()
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+
+    app.run(
+        host="0.0.0.0",
+        port=PORT,
+        debug=False
+    )
+
