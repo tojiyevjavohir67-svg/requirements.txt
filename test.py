@@ -9,9 +9,19 @@ TOKEN = "8650420595:AAGsWFJX-mYCGWUPI0UltoxG0KK6Q-X4n6c"
 ADMIN_ID = 6968399046
 MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:jtwASN46W0zU9sw7@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
-CHANNELS = [
-    "@clc_kino"
+REQUIRED_CHATS = [
+    {
+        "title": "Asosiy kanal",
+        "chat_id": "@CLC_KINO",
+        "url": "https://t.me/CLC_KINO_CHAT"
+    },
+    {
+        "title": "Majburiy chat",
+        "chat_id": "@CLC_CHAT",
+        "url": "https://t.me/CLC_CHAT"
+    }
 ]
+
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -73,13 +83,20 @@ def subscribe_keyboard():
     for channel in CHANNELS:
         markup.add(
             types.InlineKeyboardButton(
-                text=f"📢 Obuna bo'lish: {channel}",
-                url=f"https://t.me/{channel.replace('@', '')}"
+                text=f"📢 Qo'shilish: {channel}",
+                url=f"https://t.me/{channel[1:]}"
             )
         )
 
-    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check_sub"))
+    markup.add(
+        types.InlineKeyboardButton(
+            text="✅ Tekshirish",
+            callback_data="check_sub"
+        )
+    )
+
     return markup
+
 
 
 def admin_panel():
