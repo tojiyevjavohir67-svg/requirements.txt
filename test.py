@@ -1,5 +1,7 @@
 import os
+import uuid
 import threading
+import time
 from flask import Flask
 import telebot
 from telebot import types
@@ -9,34 +11,51 @@ TOKEN = "8650420595:AAGsWFJX-mYCGWUPI0UltoxG0KK6Q-X4n6c"
 ADMIN_ID = 6968399046
 MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:jtwASN46W0zU9sw7@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
-REQUIRED_CHATS = [
+DEFAULT_REQUIRED_LINKS = [
     {
-        "title": "Asosiy kanal",
-        "chat_id": "@CLC_KINO",
-        "url": "https://t.me/CLC_KINO_CHAT"
+        "title": "Kino kanal",
+        "type": "telegram",
+        "username": "@clc_kino",
+        "url": "https://t.me/clc_kino",
+        "required": True
     },
     {
-        "title": "Majburiy chat",
-        "chat_id": "@CLC_CHAT",
-        "url": "https://t.me/CLC_CHAT"
+        "title": "Kino chat",
+        "type": "chat",
+        "username": "@clc_chat",
+        "url": "https://t.me/clc_chat",
+        "required": True
     }
 ]
-
 
 bot = telebot.TeleBot(TOKEN)
 
 client = MongoClient(MONGO_URL)
 db = client["kino_bot"]
+
 movies = db["movies"]
 users = db["users"]
+links = db["required_links"]
 
 admin_states = {}
-
 app = Flask(__name__)
 
 
 def is_admin(user_id):
     return int(user_id) == int(ADMIN_ID)
+
+
+def seed_default_links():
+    if links.count_documents({}) == 0:
+        for item in DEFAULT_REQUIRED_LINKS:
+            if "kanal_username" in item["username"] or "chat_username" in item["username"]:
+                continue
+
+            item["link_id"] = uuid.uuid4().hex[:8]
+            links.insert_one(item)
+
+
+seed_default_links()
 
 
 def save_user(message):
@@ -58,14 +77,24 @@ def save_user(message):
     )
 
 
+def get_required_links():
+    return list(links.find().sort("_id", 1))
+
+
 def check_subscription(user_id):
     if is_admin(user_id):
         return True
 
-    for channel in CHANNELS:
+    for item in get_required_links():
+        item_type = item.get("type")
+        username = item.get("username")
+
+        if item_type not in ["telegram", "chat"]:
+            continue
+
         try:
-            member = bot.get_chat_member(channel, user_id)
-            print("SUB STATUS:", user_id, channel, member.status)
+            member = bot.get_chat_member(username, user_id)
+            print("SUB STATUS:", user_id, username, member.status)
 
             if member.status in ["left", "kicked"]:
                 return False
@@ -78,40 +107,59 @@ def check_subscription(user_id):
 
 
 def subscribe_keyboard():
-    markup = types.InlineKeyboardMarkup()
+    markup = types.InlineKeyboardMarkup(row_width=1)
 
-    for channel in CHANNELS:
+    all_links = get_required_links()
+
+    for item in all_links:
+        title = item.get("title", "Link")
+        url = item.get("url", "")
+        item_type = item.get("type", "telegram")
+
+        if item_type == "telegram":
+            icon = "🔵📢"
+        elif item_type == "chat":
+            icon = "🟢💬"
+        elif item_type == "instagram":
+            icon = "🟣📸"
+        else:
+            icon = "🟡🔗"
+
         markup.add(
             types.InlineKeyboardButton(
-                text=f"📢 Qo'shilish: {channel}",
-                url=f"https://t.me/{channel[1:]}"
+                text=f"{icon} Qo'shilish: {title}",
+                url=url
             )
         )
 
-    markup.add(
-        types.InlineKeyboardButton(
-            text="✅ Tekshirish",
-            callback_data="check_sub"
-        )
-    )
+    markup.add(types.InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub"))
+    markup.add(types.InlineKeyboardButton("📤 Botni ulashish", switch_inline_query=""))
 
     return markup
 
 
-
 def admin_panel():
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("➕ Kino qo'shish", callback_data="add_movie"))
-    markup.add(types.InlineKeyboardButton("🗑 Kino o'chirish", callback_data="delete_movie"))
-    markup.add(types.InlineKeyboardButton("🎬 Kinolar ro'yxati", callback_data="movie_list"))
-    markup.add(types.InlineKeyboardButton("📊 Statistika", callback_data="stats"))
+    markup = types.InlineKeyboardMarkup(row_width=1)
+
+    markup.add(types.InlineKeyboardButton("🟢➕ Kino qo'shish", callback_data="add_movie"))
+    markup.add(types.InlineKeyboardButton("🔴🗑 Kino o'chirish", callback_data="delete_movie"))
+    markup.add(types.InlineKeyboardButton("🔵🎬 Kinolar ro'yxati", callback_data="movie_list"))
+    markup.add(types.InlineKeyboardButton("🟣📊 Statistika", callback_data="stats"))
+
+    markup.add(types.InlineKeyboardButton("🟡📢 Majburiy kanal/chat qo'shish", callback_data="add_required"))
+    markup.add(types.InlineKeyboardButton("🟠📋 Majburiy obunalar ro'yxati", callback_data="required_list"))
+    markup.add(types.InlineKeyboardButton("🔴➖ Majburiy obunani o'chirish", callback_data="delete_required"))
+
+    markup.add(types.InlineKeyboardButton("📤 Botni ulashish", switch_inline_query=""))
+
     return markup
 
 
 def send_admin_panel(chat_id):
     bot.send_message(
         chat_id,
-        "👨‍💻 Admin panel:",
+        "💎👨‍💻 Admin panel:\n\n"
+        "Kerakli bo'limni tanlang:",
         reply_markup=admin_panel()
     )
 
@@ -130,19 +178,23 @@ def start(message):
     if not check_subscription(user_id):
         bot.send_message(
             message.chat.id,
-            "🔒 Botdan foydalanish uchun avval kanalga obuna bo'ling!\n\n"
-            "📢 Kanalga obuna bo'ling va ✅ Tekshirish tugmasini bosing.",
+            "💎🔒 Botdan foydalanish uchun avval majburiy obunalarga qo'shiling!\n\n"
+            "🔵 Kanalga obuna bo'ling\n"
+            "🟢 Chatga qo'shiling\n"
+            "🟣 Instagram sahifani kuzating\n\n"
+            "✅ Keyin tekshirish tugmasini bosing.",
             reply_markup=subscribe_keyboard()
         )
         return
 
     bot.send_message(
         message.chat.id,
-        "🎬 Xush kelibsiz!\n\n🔢 Kino kodini yuboring."
+        "💎🎬 Xush kelibsiz!\n\n"
+        "🔢 Kino kodini yuboring."
     )
 
 
-@bot.message_handler(commands=["admin"])
+@bot.message_handler(commands=["admin", "panel"])
 def admin_command(message):
     if is_admin(message.from_user.id):
         send_admin_panel(message.chat.id)
@@ -160,7 +212,8 @@ def check_sub(call):
         bot.answer_callback_query(call.id, "❌ Hali obuna bo'lmagansiz!")
         bot.send_message(
             call.message.chat.id,
-            "❌ Siz hali kanalga obuna bo'lmagansiz.\n\n📢 Avval kanalga obuna bo'ling.",
+            "❌ Siz hali majburiy obunalarga qo'shilmagansiz.\n\n"
+            "📢 Avval obuna bo'ling.",
             reply_markup=subscribe_keyboard()
         )
 
@@ -176,7 +229,8 @@ def add_movie(call):
 
     bot.send_message(
         call.message.chat.id,
-        "➕ Kino qo'shish boshlandi.\n\n🔢 Kino kodini yuboring. Masalan: 1"
+        "🟢➕ Kino qo'shish boshlandi.\n\n"
+        "🔢 Kino kodini yuboring. Masalan: 1"
     )
 
 
@@ -189,10 +243,7 @@ def delete_movie(call):
     bot.answer_callback_query(call.id)
     admin_states[call.from_user.id] = {"step": "delete_code"}
 
-    bot.send_message(
-        call.message.chat.id,
-        "🗑 O'chirmoqchi bo'lgan kino kodini yuboring:"
-    )
+    bot.send_message(call.message.chat.id, "🔴🗑 O'chirmoqchi bo'lgan kino kodini yuboring:")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "movie_list")
@@ -209,7 +260,7 @@ def movie_list(call):
         bot.send_message(call.message.chat.id, "📭 Hozircha kinolar yo'q.", reply_markup=admin_panel())
         return
 
-    text = "🎬 Kinolar ro'yxati:\n\n"
+    text = "🔵🎬 Kinolar ro'yxati:\n\n"
 
     for i, movie in enumerate(all_movies, start=1):
         text += f"{i}. 🔢 Kod: {movie.get('code')}\n"
@@ -231,13 +282,106 @@ def stats(call):
 
     users_count = users.count_documents({})
     movies_count = movies.count_documents({})
+    links_count = links.count_documents({})
 
     bot.send_message(
         call.message.chat.id,
-        "📊 Bot statistikasi:\n\n"
+        "🟣📊 Bot statistikasi:\n\n"
         f"👥 Start bosgan odamlar: {users_count}\n"
-        f"🎬 Kinolar soni: {movies_count}",
+        f"🎬 Kinolar soni: {movies_count}\n"
+        f"📢 Majburiy obunalar: {links_count}",
         reply_markup=admin_panel()
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "add_required")
+def add_required(call):
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ Siz admin emassiz!")
+        return
+
+    bot.answer_callback_query(call.id)
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("🔵 Telegram kanal", callback_data="add_required_telegram"))
+    markup.add(types.InlineKeyboardButton("🟢 Telegram chat/guruh", callback_data="add_required_chat"))
+    markup.add(types.InlineKeyboardButton("🟣 Instagram", callback_data="add_required_instagram"))
+    markup.add(types.InlineKeyboardButton("🟡 Boshqa link", callback_data="add_required_other"))
+
+    bot.send_message(call.message.chat.id, "🟡📢 Qanday majburiy obuna qo'shasiz?", reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda call: call.data in [
+    "add_required_telegram",
+    "add_required_chat",
+    "add_required_instagram",
+    "add_required_other"
+])
+def add_required_type(call):
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ Siz admin emassiz!")
+        return
+
+    bot.answer_callback_query(call.id)
+
+    type_map = {
+        "add_required_telegram": "telegram",
+        "add_required_chat": "chat",
+        "add_required_instagram": "instagram",
+        "add_required_other": "other"
+    }
+
+    admin_states[call.from_user.id] = {
+        "step": "required_title",
+        "type": type_map[call.data]
+    }
+
+    bot.send_message(
+        call.message.chat.id,
+        "📌 Obuna nomini yuboring.\n\n"
+        "Masalan: Kino kanal"
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "required_list")
+def required_list(call):
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ Siz admin emassiz!")
+        return
+
+    bot.answer_callback_query(call.id)
+
+    all_links = get_required_links()
+
+    if not all_links:
+        bot.send_message(call.message.chat.id, "📭 Majburiy obuna hali yo'q.", reply_markup=admin_panel())
+        return
+
+    text = "🟠📋 Majburiy obunalar ro'yxati:\n\n"
+
+    for i, item in enumerate(all_links, start=1):
+        text += f"{i}. 🆔 ID: {item.get('link_id')}\n"
+        text += f"📌 Nomi: {item.get('title')}\n"
+        text += f"📎 Turi: {item.get('type')}\n"
+        text += f"🔗 Link: {item.get('url')}\n"
+        text += f"👤 Username: {item.get('username', '-')}\n\n"
+
+    bot.send_message(call.message.chat.id, text, reply_markup=admin_panel())
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "delete_required")
+def delete_required(call):
+    if not is_admin(call.from_user.id):
+        bot.answer_callback_query(call.id, "❌ Siz admin emassiz!")
+        return
+
+    bot.answer_callback_query(call.id)
+    admin_states[call.from_user.id] = {"step": "delete_required_id"}
+
+    bot.send_message(
+        call.message.chat.id,
+        "🔴➖ O'chirmoqchi bo'lgan majburiy obuna ID sini yuboring.\n\n"
+        "ID ni 🟠📋 Majburiy obunalar ro'yxati bo'limidan oling."
     )
 
 
@@ -253,7 +397,7 @@ def handle_video(message):
     if not state or state.get("step") != "waiting_video":
         bot.send_message(
             message.chat.id,
-            "⚠️ Video qo'shish uchun avval ➕ Kino qo'shish tugmasini bosing."
+            "⚠️ Video qo'shish uchun avval 🟢➕ Kino qo'shish tugmasini bosing."
         )
         return
 
@@ -293,7 +437,9 @@ def handle_text(message):
         state = admin_states.get(user_id)
 
         if state:
-            if state.get("step") == "waiting_code":
+            step = state.get("step")
+
+            if step == "waiting_code":
                 if not text.isdigit():
                     bot.send_message(message.chat.id, "❌ Kod faqat raqam bo'lishi kerak. Masalan: 1")
                     return
@@ -303,13 +449,10 @@ def handle_text(message):
                     "code": text
                 }
 
-                bot.send_message(
-                    message.chat.id,
-                    f"✅ Kod qabul qilindi: {text}\n\n🎥 Endi video yuboring:"
-                )
+                bot.send_message(message.chat.id, f"✅ Kod qabul qilindi: {text}\n\n🎥 Endi video yuboring:")
                 return
 
-            if state.get("step") == "delete_code":
+            if step == "delete_code":
                 result = movies.delete_one({"code": text})
                 admin_states.pop(user_id, None)
 
@@ -319,15 +462,107 @@ def handle_text(message):
                     bot.send_message(message.chat.id, "❌ Bunday kodli kino topilmadi.", reply_markup=admin_panel())
                 return
 
+            if step == "required_title":
+                admin_states[user_id]["title"] = text
+                admin_states[user_id]["step"] = "required_value"
+
+                item_type = state.get("type")
+
+                if item_type in ["telegram", "chat"]:
+                    bot.send_message(
+                        message.chat.id,
+                        "👤 Username yuboring.\n\n"
+                        "Masalan: @kanal_username yoki @chat_username"
+                    )
+                elif item_type == "instagram":
+                    bot.send_message(
+                        message.chat.id,
+                        "🟣 Instagram link yuboring.\n\n"
+                        "Masalan: https://instagram.com/username"
+                    )
+                else:
+                    bot.send_message(
+                        message.chat.id,
+                        "🔗 Link yuboring.\n\n"
+                        "Masalan: https://example.com"
+                    )
+                return
+
+            if step == "required_value":
+                item_type = state.get("type")
+                title = state.get("title")
+                link_id = uuid.uuid4().hex[:8]
+
+                if item_type in ["telegram", "chat"]:
+                    username = text.strip()
+
+                    if not username.startswith("@"):
+                        username = "@" + username
+
+                    url = f"https://t.me/{username.replace('@', '')}"
+
+                    links.insert_one({
+                        "link_id": link_id,
+                        "title": title,
+                        "type": item_type,
+                        "username": username,
+                        "url": url,
+                        "required": True
+                    })
+
+                    admin_states.pop(user_id, None)
+
+                    bot.send_message(
+                        message.chat.id,
+                        "✅ Majburiy obuna qo'shildi!\n\n"
+                        f"🆔 ID: {link_id}\n"
+                        f"📌 Nomi: {title}\n"
+                        f"📎 Turi: {item_type}\n"
+                        f"👤 Username: {username}\n\n"
+                        "⚠️ Bot kanal/chat ichida admin yoki a'zo bo'lishi kerak.",
+                        reply_markup=admin_panel()
+                    )
+                    return
+
+                url = text.strip()
+
+                links.insert_one({
+                    "link_id": link_id,
+                    "title": title,
+                    "type": item_type,
+                    "username": "",
+                    "url": url,
+                    "required": True
+                })
+
+                admin_states.pop(user_id, None)
+
+                bot.send_message(
+                    message.chat.id,
+                    "✅ Link qo'shildi!\n\n"
+                    f"🆔 ID: {link_id}\n"
+                    f"📌 Nomi: {title}\n"
+                    f"🔗 Link: {url}\n\n"
+                    "⚠️ Instagram va boshqa linklar avtomatik tekshirilmaydi, faqat tugma sifatida chiqadi.",
+                    reply_markup=admin_panel()
+                )
+                return
+
+            if step == "delete_required_id":
+                result = links.delete_one({"link_id": text})
+                admin_states.pop(user_id, None)
+
+                if result.deleted_count:
+                    bot.send_message(message.chat.id, "✅ Majburiy obuna o'chirildi!", reply_markup=admin_panel())
+                else:
+                    bot.send_message(message.chat.id, "❌ Bunday ID topilmadi.", reply_markup=admin_panel())
+                return
+
         if text.isdigit():
             movie = movies.find_one({"code": text})
 
             if movie:
-                bot.send_video(
-                    message.chat.id,
-                    movie["file_id"],
-                    caption=movie.get("caption", "")
-                )
+                bot.send_video(message.chat.id, movie["file_id"], caption=movie.get("caption", ""))
             else:
                 bot.send_message(message.chat.id, "😕 Bu kod bo'yicha kino topilmadi.", reply_markup=admin_panel())
             return
@@ -338,33 +573,23 @@ def handle_text(message):
     if not check_subscription(user_id):
         bot.send_message(
             message.chat.id,
-            "🔒 Botdan foydalanish uchun kanalga obuna bo'lishingiz kerak!\n\n"
-            "📢 Avval kanalga obuna bo'ling.",
+            "💎🔒 Botdan foydalanish uchun avval majburiy obunalarga qo'shiling!\n\n"
+            "📢 Avval kanal/chatga qo'shiling.",
             reply_markup=subscribe_keyboard()
         )
         return
 
     if not text.isdigit():
-        bot.send_message(
-            message.chat.id,
-            "❌ Noto'g'ri kod.\n\n🔢 Kino kodini raqam bilan yuboring."
-        )
+        bot.send_message(message.chat.id, "❌ Noto'g'ri kod.\n\n🔢 Kino kodini raqam bilan yuboring.")
         return
 
     movie = movies.find_one({"code": text})
 
     if not movie:
-        bot.send_message(
-            message.chat.id,
-            "😕 Bu kod bo'yicha kino topilmadi.\n\n🔢 Kodni tekshirib qayta yuboring."
-        )
+        bot.send_message(message.chat.id, "😕 Bu kod bo'yicha kino topilmadi.\n\n🔢 Kodni tekshirib qayta yuboring.")
         return
 
-    bot.send_video(
-        message.chat.id,
-        movie["file_id"],
-        caption=movie.get("caption", "")
-    )
+    bot.send_video(message.chat.id, movie["file_id"], caption=movie.get("caption", ""))
 
 
 @app.route("/", methods=["GET"])
@@ -389,32 +614,10 @@ def run_bot():
         except Exception as e:
             print("❌ Bot polling xatosi:", e)
             print("🔁 Bot 5 soniyadan keyin qayta ishga tushadi...")
-
-            import time
             time.sleep(5)
-
-
-    try:
-        bot.remove_webhook()
-        print("✅ Webhook o'chirildi")
-    except Exception as e:
-        print("Webhook xatosi:", e)
-
-    bot.infinity_polling(
-        timeout=60,
-        long_polling_timeout=60,
-        skip_pending=True
-    )
 
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 5000))
-
     threading.Thread(target=run_bot, daemon=True).start()
-
-    app.run(
-        host="0.0.0.0",
-        port=PORT,
-        debug=False
-    )
-
+    app.run(host="0.0.0.0", port=PORT, debug=False)
