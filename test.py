@@ -11,6 +11,21 @@ TOKEN = "8650420595:AAGsWFJX-mYCGWUPI0UltoxG0KK6Q-X4n6c"
 ADMIN_ID =  6968399046
 MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:jtwASN46W0zU9sw7@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
+KINO_KODLARI_URL = "https://t.me/clc_kino"
+
+# Premium emoji ID larni shu yerga qo'yasiz.
+# Bilmasangiz bo'sh qoldiring: ""
+PREMIUM_EMOJI_IDS = {
+    "add": "5030787243543888610",
+    "delete": "5271851165024271824",
+    "list": "5233585291339536488",
+    "stats": "5233308575186591026",
+    "channel": "5195028614009103813",
+    "check": "5195424863396862786",
+    "broadcast": "5461054558996282111",
+    "movie": "5375464961822695044",
+}
+
 bot = telebot.TeleBot(TOKEN)
 
 client = MongoClient(MONGO_URL)
@@ -25,8 +40,12 @@ admin_states = {}
 app = Flask(__name__)
 
 
-def make_button(text, callback_data=None, url=None, style=None):
+def make_button(text, callback_data=None, url=None, style=None, emoji_key=None):
     btn = {"text": text}
+
+    emoji_id = PREMIUM_EMOJI_IDS.get(emoji_key or "", "")
+    if emoji_id:
+        btn["icon_custom_emoji_id"] = emoji_id
 
     if callback_data:
         btn["callback_data"] = callback_data
@@ -126,24 +145,41 @@ def subscribe_keyboard():
             make_button(
                 f"{icon} Qo'shilish: {title}",
                 url=url,
-                style="primary"
+                style="primary",
+                emoji_key="channel"
             )
         ])
 
-    rows.append([make_button("✅ Tekshirish", callback_data="check_sub", style="success")])
+    rows.append([
+        make_button("✅ Tekshirish", callback_data="check_sub", style="success", emoji_key="check")
+    ])
+
     return make_keyboard(rows)
+
+
+def user_start_keyboard():
+    return make_keyboard([
+        [
+            make_button(
+                "🎬 KINO KODLARI",
+                url=KINO_KODLARI_URL,
+                style="primary",
+                emoji_key="movie"
+            )
+        ]
+    ])
 
 
 def admin_panel():
     return make_keyboard([
-        [make_button("➕ Kino qo'shish", callback_data="add_movie", style="success")],
-        [make_button("🗑 Kino o'chirish", callback_data="delete_movie", style="danger")],
-        [make_button("🎬 Kinolar ro'yxati", callback_data="movie_list", style="primary")],
-        [make_button("📊 Statistika", callback_data="stats", style="primary")],
-        [make_button("📢 Majburiy kanal/chat qo'shish", callback_data="add_required", style="success")],
-        [make_button("📋 Majburiy obunalar", callback_data="required_list", style="primary")],
-        [make_button("➖ Majburiy obunani o'chirish", callback_data="delete_required", style="danger")],
-        [make_button("📨 Hammaga xabar yuborish", callback_data="broadcast", style="success")]
+        [make_button("➕ Kino qo'shish", callback_data="add_movie", style="success", emoji_key="add")],
+        [make_button("🗑 Kino o'chirish", callback_data="delete_movie", style="danger", emoji_key="delete")],
+        [make_button("🎬 Kinolar ro'yxati", callback_data="movie_list", style="primary", emoji_key="list")],
+        [make_button("📊 Statistika", callback_data="stats", style="primary", emoji_key="stats")],
+        [make_button("📢 Majburiy kanal/chat qo'shish", callback_data="add_required", style="success", emoji_key="channel")],
+        [make_button("📋 Majburiy obunalar", callback_data="required_list", style="primary", emoji_key="list")],
+        [make_button("➖ Majburiy obunani o'chirish", callback_data="delete_required", style="danger", emoji_key="delete")],
+        [make_button("📨 Hammaga xabar yuborish", callback_data="broadcast", style="success", emoji_key="broadcast")]
     ])
 
 
@@ -152,6 +188,14 @@ def send_admin_panel(chat_id):
         chat_id,
         "💎👨‍💻 Admin panel:\n\nKerakli bo'limni tanlang:",
         reply_markup=admin_panel()
+    )
+
+
+def send_user_start(chat_id):
+    bot.send_message(
+        chat_id,
+        "💎🎬 Xush kelibsiz!\n\n🔢 Kino kodini yuboring.",
+        reply_markup=user_start_keyboard()
     )
 
 
@@ -175,7 +219,7 @@ def start(message):
         )
         return
 
-    bot.send_message(message.chat.id, "💎🎬 Xush kelibsiz!\n\n🔢 Kino kodini yuboring.")
+    send_user_start(message.chat.id)
 
 
 @bot.message_handler(commands=["admin", "panel"])
@@ -188,7 +232,11 @@ def admin_command(message):
 def check_sub(call):
     if check_subscription(call.from_user.id):
         bot.answer_callback_query(call.id, "✅ Obuna tasdiqlandi!")
-        bot.send_message(call.message.chat.id, "✅ Obuna tasdiqlandi!\n\n🎬 Endi kino kodini yuboring.")
+        bot.send_message(
+            call.message.chat.id,
+            "✅ Obuna tasdiqlandi!\n\n🎬 Endi kino kodini yuboring.",
+            reply_markup=user_start_keyboard()
+        )
     else:
         bot.answer_callback_query(call.id, "❌ Hali obuna bo'lmagansiz!")
         bot.send_message(
@@ -294,10 +342,10 @@ def add_required(call):
     bot.answer_callback_query(call.id)
 
     markup = make_keyboard([
-        [make_button("📢 Oddiy kanal", callback_data="add_req_telegram", style="primary")],
-        [make_button("💬 Public chat/guruh", callback_data="add_req_chat", style="success")],
-        [make_button("📝 Zayafka kanal", callback_data="add_req_request", style="success")],
-        [make_button("📸 Instagram", callback_data="add_req_instagram", style="primary")]
+        [make_button("📢 Oddiy kanal", callback_data="add_req_telegram", style="primary", emoji_key="channel")],
+        [make_button("💬 Public chat/guruh", callback_data="add_req_chat", style="success", emoji_key="channel")],
+        [make_button("📝 Zayafka kanal", callback_data="add_req_request", style="success", emoji_key="channel")],
+        [make_button("📸 Instagram", callback_data="add_req_instagram", style="primary", emoji_key="channel")]
     ])
 
     bot.send_message(call.message.chat.id, "Qanday majburiy obuna qo'shasiz?", reply_markup=markup)
