@@ -7,7 +7,7 @@ from flask import Flask
 import telebot
 from pymongo import MongoClient
 
-TOKEN = "8650420595:AAGsWFJX-mYCGWUPI0UltoxG0KK6Q-X4n6c"
+TOKEN = "8650420595:AAG28P8AdmBl2qa4apTKnIQV9xcV3471b6A"
 ADMIN_ID =  6968399046
 MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:jtwASN46W0zU9sw7@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
