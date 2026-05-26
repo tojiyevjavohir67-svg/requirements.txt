@@ -131,15 +131,15 @@ def subscribe_keyboard():
         link_type = item.get("type", "telegram")
 
         if link_type == "telegram":
-            icon = "📢"
+            icon = ""
         elif link_type == "chat":
-            icon = "💬"
+            icon = ""
         elif link_type == "request_channel":
-            icon = "📝"
+            icon = ""
         elif link_type == "instagram":
-            icon = "📸"
+            icon = ""
         else:
-            icon = "🔗"
+            icon = ""
 
         rows.append([
             make_button(
@@ -161,7 +161,7 @@ def user_start_keyboard():
     return make_keyboard([
         [
             make_button(
-                "🎬 KINO KODLARI",
+                " KINO KODLARI",
                 url=KINO_KODLARI_URL,
                 style="primary",
                 emoji_key="movie"
@@ -172,14 +172,14 @@ def user_start_keyboard():
 
 def admin_panel():
     return make_keyboard([
-        [make_button("➕ Kino qo'shish", callback_data="add_movie", style="success", emoji_key="add")],
-        [make_button("🗑 Kino o'chirish", callback_data="delete_movie", style="danger", emoji_key="delete")],
-        [make_button("🎬 Kinolar ro'yxati", callback_data="movie_list", style="primary", emoji_key="list")],
-        [make_button("📊 Statistika", callback_data="stats", style="primary", emoji_key="stats")],
-        [make_button("📢 Majburiy kanal/chat qo'shish", callback_data="add_required", style="success", emoji_key="channel")],
-        [make_button("📋 Majburiy obunalar", callback_data="required_list", style="primary", emoji_key="list")],
-        [make_button("➖ Majburiy obunani o'chirish", callback_data="delete_required", style="danger", emoji_key="delete")],
-        [make_button("📨 Hammaga xabar yuborish", callback_data="broadcast", style="success", emoji_key="broadcast")]
+        [make_button(" Kino qo'shish", callback_data="add_movie", style="success", emoji_key="add")],
+        [make_button(" Kino o'chirish", callback_data="delete_movie", style="danger", emoji_key="delete")],
+        [make_button(" Kinolar ro'yxati", callback_data="movie_list", style="primary", emoji_key="list")],
+        [make_button(" Statistika", callback_data="stats", style="primary", emoji_key="stats")],
+        [make_button(" Majburiy kanal/chat qo'shish", callback_data="add_required", style="success", emoji_key="channel")],
+        [make_button(" Majburiy obunalar", callback_data="required_list", style="primary", emoji_key="list")],
+        [make_button(" Majburiy obunani o'chirish", callback_data="delete_required", style="danger", emoji_key="delete")],
+        [make_button(" Hammaga xabar yuborish", callback_data="broadcast", style="success", emoji_key="broadcast")]
     ])
 
 
@@ -325,7 +325,7 @@ def stats(call):
 
     bot.send_message(
         call.message.chat.id,
-        "📊 Bot statistikasi:\n\n"
+        " Bot statistikasi:\n\n"
         f"👥 Start bosgan odamlar: {users.count_documents({})}\n"
         f"🎬 Kinolar soni: {movies.count_documents({})}\n"
         f"📢 Majburiy obunalar: {required_links.count_documents({})}",
@@ -342,10 +342,10 @@ def add_required(call):
     bot.answer_callback_query(call.id)
 
     markup = make_keyboard([
-        [make_button("📢 Oddiy kanal", callback_data="add_req_telegram", style="primary", emoji_key="channel")],
-        [make_button("💬 Public chat/guruh", callback_data="add_req_chat", style="success", emoji_key="channel")],
-        [make_button("📝 Zayafka kanal", callback_data="add_req_request", style="success", emoji_key="channel")],
-        [make_button("📸 Instagram", callback_data="add_req_instagram", style="primary", emoji_key="channel")]
+        [make_button(" Oddiy kanal", callback_data="add_req_telegram", style="primary", emoji_key="channel")],
+        [make_button(" Public chat/guruh", callback_data="add_req_chat", style="success", emoji_key="channel")],
+        [make_button(" Zayafka kanal", callback_data="add_req_request", style="success", emoji_key="channel")],
+        [make_button(" Instagram", callback_data="add_req_instagram", style="primary", emoji_key="channel")]
     ])
 
     bot.send_message(call.message.chat.id, "Qanday majburiy obuna qo'shasiz?", reply_markup=markup)
