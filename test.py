@@ -1,14 +1,14 @@
 import os
 import uuid
 import time
+import json
 import threading
 from flask import Flask
 import telebot
-from telebot import types
 from pymongo import MongoClient
 
 TOKEN = "8650420595:AAGsWFJX-mYCGWUPI0UltoxG0KK6Q-X4n6c"
-ADMIN_ID = 6968399046
+ADMIN_ID =  6968399046
 MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:jtwASN46W0zU9sw7@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
 bot = telebot.TeleBot(TOKEN)
@@ -23,6 +23,25 @@ join_requests = db["join_requests"]
 
 admin_states = {}
 app = Flask(__name__)
+
+
+def make_button(text, callback_data=None, url=None, style=None):
+    btn = {"text": text}
+
+    if callback_data:
+        btn["callback_data"] = callback_data
+
+    if url:
+        btn["url"] = url
+
+    if style:
+        btn["style"] = style
+
+    return btn
+
+
+def make_keyboard(rows):
+    return json.dumps({"inline_keyboard": rows})
 
 
 def is_admin(user_id):
@@ -85,7 +104,7 @@ def check_subscription(user_id):
 
 
 def subscribe_keyboard():
-    markup = types.InlineKeyboardMarkup(row_width=1)
+    rows = []
 
     for item in required_links.find().sort("_id", 1):
         title = item.get("title", "Obuna")
@@ -93,38 +112,39 @@ def subscribe_keyboard():
         link_type = item.get("type", "telegram")
 
         if link_type == "telegram":
-            icon = "🔵📢"
+            icon = "📢"
         elif link_type == "chat":
-            icon = "🟢💬"
+            icon = "💬"
         elif link_type == "request_channel":
-            icon = "🟡📝"
+            icon = "📝"
         elif link_type == "instagram":
-            icon = "🟣📸"
+            icon = "📸"
         else:
-            icon = "🟠🔗"
+            icon = "🔗"
 
-        markup.add(types.InlineKeyboardButton(
-            text=f"{icon} Qo'shilish: {title}",
-            url=url
-        ))
+        rows.append([
+            make_button(
+                f"{icon} Qo'shilish: {title}",
+                url=url,
+                style="primary"
+            )
+        ])
 
-    markup.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check_sub"))
-    return markup
+    rows.append([make_button("✅ Tekshirish", callback_data="check_sub", style="success")])
+    return make_keyboard(rows)
 
 
 def admin_panel():
-    markup = types.InlineKeyboardMarkup(row_width=1)
-
-    markup.add(types.InlineKeyboardButton("🟢➕ Kino qo'shish", callback_data="add_movie"))
-    markup.add(types.InlineKeyboardButton("🔴🗑 Kino o'chirish", callback_data="delete_movie"))
-    markup.add(types.InlineKeyboardButton("🔵🎬 Kinolar ro'yxati", callback_data="movie_list"))
-    markup.add(types.InlineKeyboardButton("🟣📊 Statistika", callback_data="stats"))
-    markup.add(types.InlineKeyboardButton("🟡📢 Majburiy kanal/chat qo'shish", callback_data="add_required"))
-    markup.add(types.InlineKeyboardButton("🟠📋 Majburiy obunalar", callback_data="required_list"))
-    markup.add(types.InlineKeyboardButton("🔴➖ Majburiy obunani o'chirish", callback_data="delete_required"))
-    markup.add(types.InlineKeyboardButton("🟢📨 Hammaga xabar yuborish", callback_data="broadcast"))
-
-    return markup
+    return make_keyboard([
+        [make_button("➕ Kino qo'shish", callback_data="add_movie", style="success")],
+        [make_button("🗑 Kino o'chirish", callback_data="delete_movie", style="danger")],
+        [make_button("🎬 Kinolar ro'yxati", callback_data="movie_list", style="primary")],
+        [make_button("📊 Statistika", callback_data="stats", style="primary")],
+        [make_button("📢 Majburiy kanal/chat qo'shish", callback_data="add_required", style="success")],
+        [make_button("📋 Majburiy obunalar", callback_data="required_list", style="primary")],
+        [make_button("➖ Majburiy obunani o'chirish", callback_data="delete_required", style="danger")],
+        [make_button("📨 Hammaga xabar yuborish", callback_data="broadcast", style="success")]
+    ])
 
 
 def send_admin_panel(chat_id):
@@ -212,7 +232,7 @@ def add_movie(call):
 
     bot.answer_callback_query(call.id)
     admin_states[call.from_user.id] = {"step": "waiting_code"}
-    bot.send_message(call.message.chat.id, "🟢➕ Kino qo'shish boshlandi.\n\n🔢 Kino kodini yuboring. Masalan: 1")
+    bot.send_message(call.message.chat.id, "➕ Kino qo'shish boshlandi.\n\n🔢 Kino kodini yuboring. Masalan: 1")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "delete_movie")
@@ -223,7 +243,7 @@ def delete_movie(call):
 
     bot.answer_callback_query(call.id)
     admin_states[call.from_user.id] = {"step": "delete_code"}
-    bot.send_message(call.message.chat.id, "🔴🗑 O'chirmoqchi bo'lgan kino kodini yuboring:")
+    bot.send_message(call.message.chat.id, "🗑 O'chirmoqchi bo'lgan kino kodini yuboring:")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "movie_list")
@@ -239,7 +259,7 @@ def movie_list(call):
         bot.send_message(call.message.chat.id, "📭 Hozircha kinolar yo'q.", reply_markup=admin_panel())
         return
 
-    text = "🔵🎬 Kinolar ro'yxati:\n\n"
+    text = "🎬 Kinolar ro'yxati:\n\n"
     for i, movie in enumerate(all_movies, start=1):
         text += f"{i}. 🔢 Kod: {movie.get('code')}\n"
         text += f"🎞 Nomi: {movie.get('caption', 'Nomsiz')}\n\n"
@@ -257,7 +277,7 @@ def stats(call):
 
     bot.send_message(
         call.message.chat.id,
-        "🟣📊 Bot statistikasi:\n\n"
+        "📊 Bot statistikasi:\n\n"
         f"👥 Start bosgan odamlar: {users.count_documents({})}\n"
         f"🎬 Kinolar soni: {movies.count_documents({})}\n"
         f"📢 Majburiy obunalar: {required_links.count_documents({})}",
@@ -273,11 +293,12 @@ def add_required(call):
 
     bot.answer_callback_query(call.id)
 
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("🔵 Oddiy kanal", callback_data="add_req_telegram"))
-    markup.add(types.InlineKeyboardButton("🟢 Public chat/guruh", callback_data="add_req_chat"))
-    markup.add(types.InlineKeyboardButton("🟡 Zayafka kanal", callback_data="add_req_request"))
-    markup.add(types.InlineKeyboardButton("🟣 Instagram", callback_data="add_req_instagram"))
+    markup = make_keyboard([
+        [make_button("📢 Oddiy kanal", callback_data="add_req_telegram", style="primary")],
+        [make_button("💬 Public chat/guruh", callback_data="add_req_chat", style="success")],
+        [make_button("📝 Zayafka kanal", callback_data="add_req_request", style="success")],
+        [make_button("📸 Instagram", callback_data="add_req_instagram", style="primary")]
+    ])
 
     bot.send_message(call.message.chat.id, "Qanday majburiy obuna qo'shasiz?", reply_markup=markup)
 
@@ -318,7 +339,7 @@ def required_list(call):
         bot.send_message(call.message.chat.id, "📭 Majburiy obuna yo'q.", reply_markup=admin_panel())
         return
 
-    text = "🟠📋 Majburiy obunalar:\n\n"
+    text = "📋 Majburiy obunalar:\n\n"
     for item in items:
         text += f"🆔 ID: {item.get('link_id')}\n"
         text += f"📌 Nomi: {item.get('title')}\n"
@@ -337,7 +358,7 @@ def delete_required(call):
 
     bot.answer_callback_query(call.id)
     admin_states[call.from_user.id] = {"step": "delete_required"}
-    bot.send_message(call.message.chat.id, "🔴➖ O'chirmoqchi bo'lgan majburiy obuna ID sini yuboring.")
+    bot.send_message(call.message.chat.id, "➖ O'chirmoqchi bo'lgan majburiy obuna ID sini yuboring.")
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "broadcast")
@@ -348,7 +369,7 @@ def broadcast(call):
 
     bot.answer_callback_query(call.id)
     admin_states[call.from_user.id] = {"step": "broadcast"}
-    bot.send_message(call.message.chat.id, "🟢📨 Hammaga yuboriladigan xabarni yozing:")
+    bot.send_message(call.message.chat.id, "📨 Hammaga yuboriladigan xabarni yozing:")
 
 
 @bot.message_handler(content_types=["video"])
@@ -361,7 +382,7 @@ def handle_video(message):
     state = admin_states.get(user_id)
 
     if not state or state.get("step") != "waiting_video":
-        bot.send_message(message.chat.id, "⚠️ Video qo'shish uchun avval 🟢➕ Kino qo'shish tugmasini bosing.")
+        bot.send_message(message.chat.id, "⚠️ Video qo'shish uchun avval ➕ Kino qo'shish tugmasini bosing.")
         return
 
     code = state.get("code")
@@ -415,7 +436,7 @@ def handle_text(message):
                 admin_states[user_id]["step"] = "required_value"
 
                 if state.get("type") == "instagram":
-                    bot.send_message(message.chat.id, "🟣 Instagram link yuboring. Masalan: https://instagram.com/username")
+                    bot.send_message(message.chat.id, "📸 Instagram link yuboring. Masalan: https://instagram.com/username")
                 else:
                     bot.send_message(message.chat.id, "👤 Username yuboring. Masalan: @kanal_username")
                 return
