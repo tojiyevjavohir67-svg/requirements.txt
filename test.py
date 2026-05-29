@@ -534,6 +534,16 @@ def handle_text(message):
                     bot.send_message(message.chat.id, "❌ Bunday ID topilmadi.", reply_markup=admin_panel())
                 return
 
+            if link_type == "instagram":
+    username = ""
+    url = normalize_url(text)
+else:
+    username = text.strip()
+    if not username.startswith("@"):
+        username = "@" + username
+    url = f"https://t.me/{username.replace('@', '')}"
+
+
             if step == "broadcast":
                 admin_states.pop(user_id, None)
 
