@@ -121,52 +121,53 @@ def check_subscription(user_id):
 
     return True
 
-def normalize_url(url):
-    url = (url or "").strip()
-
-    if not url:
-        return ""
-
-    if url.startswith("@"):
-        return f"https://t.me/{url[1:]}"
-
-    if url.startswith("t.me/"):
-        return f"https://{url}"
-
-    if url.startswith("instagram.com/"):
-        return f"https://{url}"
-
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-
-    return f"https://t.me/{url}"
-
 
 def subscribe_keyboard():
     rows = []
 
     for item in required_links.find().sort("_id", 1):
         title = item.get("title", "Obuna")
-        url = normalize_url(item.get("url") or item.get("username"))
+        url = item.get("url", "")
+        link_type = item.get("type", "telegram")
 
-        if not url:
-            continue
+        if link_type == "telegram":
+            icon = "📢"
+        elif link_type == "chat":
+            icon = "💬"
+        elif link_type == "request_channel":
+            icon = "📝"
+        elif link_type == "instagram":
+            icon = "📸"
+        else:
+            icon = "🔗"
 
         rows.append([
             make_button(
-                f"📢 Qo'shilish: {title}",
+                f"{icon} Qo'shilish: {title}",
                 url=url,
-                style="primary"
+                style="primary",
+                emoji_key="channel"
             )
         ])
 
     rows.append([
-        make_button("✅ Tekshirish", callback_data="check_sub", style="success")
+        make_button("✅ Tekshirish", callback_data="check_sub", style="success", emoji_key="check")
     ])
 
     return make_keyboard(rows)
 
 
+def user_start_keyboard():
+    return make_keyboard([
+        [
+            make_button(
+                "🎬 KINO KODLARI",
+                url=KINO_KODLARI_URL,
+                style="primary",
+                emoji_key="movie"
+            )
+        ]
+    ])
 
 
 def admin_panel():
@@ -533,7 +534,6 @@ def handle_text(message):
                 else:
                     bot.send_message(message.chat.id, "❌ Bunday ID topilmadi.", reply_markup=admin_panel())
                 return
-
 
             if step == "broadcast":
                 admin_states.pop(user_id, None)
