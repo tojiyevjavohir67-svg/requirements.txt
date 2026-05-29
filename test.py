@@ -9,7 +9,7 @@ from pymongo import MongoClient
 
 TOKEN = "8650420595:AAFYhPFeWN1glmV25MQlg2yuxZy0gZK5Wvo"
 ADMIN_ID = 6968399046
-MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:javohir2011@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
+MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:javohir1234@cluster0.pysrg0q.mongodb.net/?appName=Cluster0"
 
 KINO_KODLARI_URL = "https://t.me/clc_kino"
 
