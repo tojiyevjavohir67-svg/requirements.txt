@@ -120,6 +120,21 @@ def save_user(message):
     )
 
 
+def find_movie_by_code(code):
+    code = str(code).strip()
+
+    movie = movies.find_one({"code": code})
+    if movie:
+        return movie
+
+    if code.isdigit():
+        movie = movies.find_one({"code": int(code)})
+        if movie:
+            return movie
+
+    return None
+
+
 def check_subscription(user_id):
     if is_admin(user_id):
         return True
@@ -487,7 +502,7 @@ def handle_video(message):
         bot.send_message(message.chat.id, "⚠️ Video qo'shish uchun avval ➕ Kino qo'shish tugmasini bosing.")
         return
 
-    code = state.get("code")
+    code = str(state.get("code")).strip()
     caption = message.caption or f"🎬 Kino\n🔢 Kod: {code}"
 
     movies.update_one(
@@ -524,7 +539,7 @@ def handle_text(message):
                 return
 
             if step == "delete_code":
-                result = movies.delete_one({"code": text})
+                result = movies.delete_many({"$or": [{"code": text}, {"code": int(text) if text.isdigit() else text}]})
                 admin_states.pop(user_id, None)
 
                 if result.deleted_count:
@@ -614,7 +629,7 @@ def handle_text(message):
                 return
 
         if text.isdigit():
-            movie = movies.find_one({"code": text})
+            movie = find_movie_by_code(text)
 
             if movie:
                 bot.send_video(message.chat.id, movie["file_id"], caption=movie.get("caption", ""))
@@ -637,7 +652,7 @@ def handle_text(message):
         bot.send_message(message.chat.id, "❌ Noto'g'ri kod.\n\n🔢 Kino kodini raqam bilan yuboring.")
         return
 
-    movie = movies.find_one({"code": text})
+    movie = find_movie_by_code(text)
 
     if not movie:
         bot.send_message(message.chat.id, "😕 Bu kod bo'yicha kino topilmadi.\n\n🔢 Kodni tekshirib qayta yuboring.")
