@@ -1,3 +1,4 @@
+
 import os
 import uuid
 import time
@@ -13,6 +14,8 @@ MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:javohir1234@cluster0.pysrg0q
 
 KINO_KODLARI_URL = "https://t.me/clc_kino"
 
+# Premium emoji ID larni shu yerga qo'yasiz.
+# Bilmasangiz bo'sh qoldiring: ""
 PREMIUM_EMOJI_IDS = {
     "add": "5030787243543888610",
     "delete": "5271851165024271824",
@@ -35,7 +38,7 @@ required_links = db["required_links"]
 join_requests = db["join_requests"]
 
 admin_states = {}
-app = Flask(__name__)
+app = Flask(name) # pyright: ignore[reportUndefinedVariable]
 
 
 def make_button(text, callback_data=None, url=None, style=None, emoji_key=None):
@@ -61,48 +64,12 @@ def make_keyboard(rows):
     return json.dumps({"inline_keyboard": rows})
 
 
-def normalize_username(value):
-    value = (value or "").strip()
-
-    if not value:
-        return ""
-
-    value = value.replace("https://t.me/", "")
-    value = value.replace("http://t.me/", "")
-    value = value.replace("t.me/", "")
-    value = value.strip("/")
-
-    if value.startswith("@"):
-        return value
-
-    return "@" + value
-
-
-def normalize_url(value):
-    value = (value or "").strip()
-
-    if not value:
-        return ""
-
-    if value.startswith("http://") or value.startswith("https://"):
-        return value
-
-    if value.startswith("@"):
-        return f"https://t.me/{value[1:]}"
-
-    if value.startswith("t.me/"):
-        return f"https://{value}"
-
-    return f"https://t.me/{value}"
-
-
 def is_admin(user_id):
     return int(user_id) == int(ADMIN_ID)
 
 
 def save_user(message):
     user = message.from_user
-
     if not user:
         return
 
@@ -120,57 +87,30 @@ def save_user(message):
     )
 
 
-def find_movie_by_code(code):
-    code = str(code).strip()
-
-    movie = movies.find_one({"code": code})
-    if movie:
-        return movie
-
-    if code.isdigit():
-        movie = movies.find_one({"code": int(code)})
-        if movie:
-            return movie
-
-    return None
-
-
 def check_subscription(user_id):
     if is_admin(user_id):
         return True
 
     for item in required_links.find():
         link_type = item.get("type")
-        username = normalize_username(item.get("username"))
+        username = item.get("username")
 
         if link_type in ["telegram", "chat"]:
-            if not username:
-                continue
-
             try:
                 member = bot.get_chat_member(username, user_id)
-                print("OBUNA STATUS:", user_id, username, member.status)
-
                 if member.status in ["left", "kicked"]:
                     return False
-
             except Exception as e:
-                print("OBUNA TEKSHIRISH XATOSI:", username, e)
+                print("OBUNA TEKSHIRISH XATOSI:", e)
                 return False
 
-        elif link_type == "request_channel":
-            if not username:
-                continue
-
+        if link_type == "request_channel":
             try:
                 member = bot.get_chat_member(username, user_id)
-                print("ZAYAFKA STATUS:", user_id, username, member.status)
-
                 if member.status not in ["left", "kicked"]:
                     continue
-
-            except Exception as e:
-                print("ZAYAFKA MEMBER TEKSHIRISH XATOSI:", username, e)
+            except Exception:
+                pass
 
             request_exists = join_requests.find_one({
                 "user_id": user_id,
@@ -180,9 +120,6 @@ def check_subscription(user_id):
             if not request_exists:
                 return False
 
-        else:
-            continue
-
     return True
 
 
@@ -191,11 +128,8 @@ def subscribe_keyboard():
 
     for item in required_links.find().sort("_id", 1):
         title = item.get("title", "Obuna")
+        url = item.get("url", "")
         link_type = item.get("type", "telegram")
-        url = normalize_url(item.get("url") or item.get("username"))
-
-        if not url:
-            continue
 
         if link_type == "telegram":
             icon = "📢"
@@ -232,7 +166,8 @@ def user_start_keyboard():
                 url=KINO_KODLARI_URL,
                 style="primary",
                 emoji_key="movie"
-            )
+
+)
         ]
     ])
 
@@ -353,7 +288,9 @@ def add_movie(call):
 @bot.callback_query_handler(func=lambda call: call.data == "delete_movie")
 def delete_movie(call):
     if not is_admin(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Siz admin emassiz!")
+        bot.answer_callback_query(call.id,
+
+"❌ Siz admin emassiz!")
         return
 
     bot.answer_callback_query(call.id)
@@ -375,7 +312,6 @@ def movie_list(call):
         return
 
     text = "🎬 Kinolar ro'yxati:\n\n"
-
     for i, movie in enumerate(all_movies, start=1):
         text += f"{i}. 🔢 Kod: {movie.get('code')}\n"
         text += f"🎞 Nomi: {movie.get('caption', 'Nomsiz')}\n\n"
@@ -456,7 +392,6 @@ def required_list(call):
         return
 
     text = "📋 Majburiy obunalar:\n\n"
-
     for item in items:
         text += f"🆔 ID: {item.get('link_id')}\n"
         text += f"📌 Nomi: {item.get('title')}\n"
@@ -502,7 +437,7 @@ def handle_video(message):
         bot.send_message(message.chat.id, "⚠️ Video qo'shish uchun avval ➕ Kino qo'shish tugmasini bosing.")
         return
 
-    code = str(state.get("code")).strip()
+    code = state.get("code")
     caption = message.caption or f"🎬 Kino\n🔢 Kod: {code}"
 
     movies.update_one(
@@ -539,7 +474,7 @@ def handle_text(message):
                 return
 
             if step == "delete_code":
-                result = movies.delete_many({"$or": [{"code": text}, {"code": int(text) if text.isdigit() else text}]})
+                result = movies.delete_one({"code": text})
                 admin_states.pop(user_id, None)
 
                 if result.deleted_count:
@@ -566,13 +501,11 @@ def handle_text(message):
                 if link_type == "instagram":
                     username = ""
                     url = text.strip()
-
-                    if url.startswith("instagram.com/"):
-                        url = "https://" + url
-
                 else:
-                    username = normalize_username(text)
-                    url = normalize_url(username)
+                    username = text.strip()
+                    if not username.startswith("@"):
+                        username = "@" + username
+                    url = f"https://t.me/{username.replace('@', '')}"
 
                 required_links.insert_one({
                     "link_id": link_id,
@@ -582,7 +515,6 @@ def handle_text(message):
                     "url": url,
                     "required": True
                 })
-
                 admin_states.pop(user_id, None)
 
                 bot.send_message(
@@ -591,7 +523,6 @@ def handle_text(message):
                     f"🆔 ID: {link_id}\n"
                     f"📌 Nomi: {title}\n"
                     f"📎 Turi: {link_type}\n"
-                    f"👤 Username: {username or '-'}\n"
                     f"🔗 Link: {url}",
                     reply_markup=admin_panel()
                 )
@@ -629,7 +560,7 @@ def handle_text(message):
                 return
 
         if text.isdigit():
-            movie = find_movie_by_code(text)
+            movie = movies.find_one({"code": text})
 
             if movie:
                 bot.send_video(message.chat.id, movie["file_id"], caption=movie.get("caption", ""))
@@ -652,7 +583,7 @@ def handle_text(message):
         bot.send_message(message.chat.id, "❌ Noto'g'ri kod.\n\n🔢 Kino kodini raqam bilan yuboring.")
         return
 
-    movie = find_movie_by_code(text)
+    movie = movies.find_one({"code": text})
 
     if not movie:
         bot.send_message(message.chat.id, "😕 Bu kod bo'yicha kino topilmadi.\n\n🔢 Kodni tekshirib qayta yuboring.")
@@ -686,7 +617,7 @@ def run_bot():
             time.sleep(5)
 
 
-if __name__ == "__main__":
+if name == "main": # pyright: ignore[reportUndefinedVariable]
     PORT = int(os.environ.get("PORT", 5000))
     threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=PORT, debug=False)
