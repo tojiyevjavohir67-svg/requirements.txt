@@ -13,8 +13,6 @@ MONGO_URL = "mongodb+srv://tojiyevjavohir67_db_user:javohir1234@cluster0.pysrg0q
 
 KINO_KODLARI_URL = "https://t.me/clc_kino"
 
-# Premium emoji ID larni shu yerga qo'yasiz.
-# Bilmasangiz bo'sh qoldiring: ""
 PREMIUM_EMOJI_IDS = {
     "add": "5030787243543888610",
     "delete": "5271851165024271824",
@@ -63,12 +61,48 @@ def make_keyboard(rows):
     return json.dumps({"inline_keyboard": rows})
 
 
+def normalize_username(value):
+    value = (value or "").strip()
+
+    if not value:
+        return ""
+
+    value = value.replace("https://t.me/", "")
+    value = value.replace("http://t.me/", "")
+    value = value.replace("t.me/", "")
+    value = value.strip("/")
+
+    if value.startswith("@"):
+        return value
+
+    return "@" + value
+
+
+def normalize_url(value):
+    value = (value or "").strip()
+
+    if not value:
+        return ""
+
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+
+    if value.startswith("@"):
+        return f"https://t.me/{value[1:]}"
+
+    if value.startswith("t.me/"):
+        return f"https://{value}"
+
+    return f"https://t.me/{value}"
+
+
 def is_admin(user_id):
     return int(user_id) == int(ADMIN_ID)
 
 
 def save_user(message):
     user = message.from_user
+
     if not user:
         return
 
@@ -92,24 +126,36 @@ def check_subscription(user_id):
 
     for item in required_links.find():
         link_type = item.get("type")
-        username = item.get("username")
+        username = normalize_username(item.get("username"))
 
         if link_type in ["telegram", "chat"]:
+            if not username:
+                continue
+
             try:
                 member = bot.get_chat_member(username, user_id)
+                print("OBUNA STATUS:", user_id, username, member.status)
+
                 if member.status in ["left", "kicked"]:
                     return False
+
             except Exception as e:
-                print("OBUNA TEKSHIRISH XATOSI:", e)
+                print("OBUNA TEKSHIRISH XATOSI:", username, e)
                 return False
 
-        if link_type == "request_channel":
+        elif link_type == "request_channel":
+            if not username:
+                continue
+
             try:
                 member = bot.get_chat_member(username, user_id)
+                print("ZAYAFKA STATUS:", user_id, username, member.status)
+
                 if member.status not in ["left", "kicked"]:
                     continue
-            except Exception:
-                pass
+
+            except Exception as e:
+                print("ZAYAFKA MEMBER TEKSHIRISH XATOSI:", username, e)
 
             request_exists = join_requests.find_one({
                 "user_id": user_id,
@@ -119,6 +165,9 @@ def check_subscription(user_id):
             if not request_exists:
                 return False
 
+        else:
+            continue
+
     return True
 
 
@@ -127,8 +176,11 @@ def subscribe_keyboard():
 
     for item in required_links.find().sort("_id", 1):
         title = item.get("title", "Obuna")
-        url = item.get("url", "")
         link_type = item.get("type", "telegram")
+        url = normalize_url(item.get("url") or item.get("username"))
+
+        if not url:
+            continue
 
         if link_type == "telegram":
             icon = "📢"
@@ -308,6 +360,7 @@ def movie_list(call):
         return
 
     text = "🎬 Kinolar ro'yxati:\n\n"
+
     for i, movie in enumerate(all_movies, start=1):
         text += f"{i}. 🔢 Kod: {movie.get('code')}\n"
         text += f"🎞 Nomi: {movie.get('caption', 'Nomsiz')}\n\n"
@@ -388,6 +441,7 @@ def required_list(call):
         return
 
     text = "📋 Majburiy obunalar:\n\n"
+
     for item in items:
         text += f"🆔 ID: {item.get('link_id')}\n"
         text += f"📌 Nomi: {item.get('title')}\n"
@@ -497,11 +551,13 @@ def handle_text(message):
                 if link_type == "instagram":
                     username = ""
                     url = text.strip()
+
+                    if url.startswith("instagram.com/"):
+                        url = "https://" + url
+
                 else:
-                    username = text.strip()
-                    if not username.startswith("@"):
-                        username = "@" + username
-                    url = f"https://t.me/{username.replace('@', '')}"
+                    username = normalize_username(text)
+                    url = normalize_url(username)
 
                 required_links.insert_one({
                     "link_id": link_id,
@@ -520,6 +576,7 @@ def handle_text(message):
                     f"🆔 ID: {link_id}\n"
                     f"📌 Nomi: {title}\n"
                     f"📎 Turi: {link_type}\n"
+                    f"👤 Username: {username or '-'}\n"
                     f"🔗 Link: {url}",
                     reply_markup=admin_panel()
                 )
